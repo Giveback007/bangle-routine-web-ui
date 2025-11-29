@@ -45,7 +45,7 @@
     let isConnected = $state(false);
     let listState: ListState | null = $state(null);
     let toDelete = new SvelteSet<number>();
-    let editState = $state<null | 'del' | 'edit'>('edit');
+    let editState = $state<null | 'del' | 'edit'>(null);
     let expanded = $state<{ [K in string]: boolean }>({});
     let updatingWatch = $state(1);
     let isReading: 'ERR' | "LOADING" | "DONE" = $state("DONE");
@@ -59,186 +59,214 @@
         checklist: 2,
     } as const;
 </script>
-<div class="p-3 font-medium">
-    <div class="flex">
-        <button
-            class="border p-1 {isConnected ? "bg-green-400" : "bg-orange-300"}"
-            onclick={async () => {
-                if (isConnected) {
-                    UART.close();
-                    connection = null;
-                    isConnected = false
-                } else {
-                    connection = await UART.connectAsync();
-                    isConnected = true;
-                }
-            }}
-        >{isConnected ? "Disconnect" : "Connect"}</button>
 
-        <div class="min-h-full border mx-3.5"></div>
+<div class="p-1 sm:p-2 md:p-2.5 font-medium bg-gray-50 min-h-screen">
+    <!-- Header Controls -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-1 sm:p-2 md:p-4 mb-2">
+        <div class="flex gap-2 items-center flex-wrap">
+            <button
+                class="px-3 py-2 rounded-md font-semibold transition-all {isConnected 
+                    ? 'bg-green-500 hover:bg-green-600 text-white' 
+                    : 'bg-orange-400 hover:bg-orange-500 text-white'}"
+                onclick={async () => {
+                    if (isConnected) {
+                        UART.close();
+                        connection = null;
+                        isConnected = false
+                    } else {
+                        connection = await UART.connectAsync();
+                        isConnected = true;
+                    }
+                }}
+            >   
+                <span class="inline sm:hidden">{isConnected ? "●" : "○"}</span>
+                <span class="hidden sm:inline">{isConnected ? "● Connected" : "○ Connect"}</span>
+            </button>
 
-        <button 
-            class:bg-red-400={editState === 'del'}
-            class="border p-1 mr-0.5"
-            onclick={() => editState = editState === 'del' ? null : 'del'}
-        >Del</button>
+            <div class="w-px h-6 bg-gray-300"></div>
 
-        <button 
-            class:bg-blue-400={editState === 'edit'}
-            class="border p-1 mr-0.5"
-            onclick={() => editState = editState === 'edit' ? null : 'edit'}
-        >Edit</button>
+            <button 
+                class="min-w-12 p-2 rounded-md font-semibold transition-all {editState === 'del'
+                    ? 'bg-red-500 text-white' 
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
+                onclick={() => editState = editState === 'del' ? null : 'del'}
+            >🗑 <span class="hidden sm:inline">Delete</span></button>
 
-        <div class="min-h-full border mx-3.5"></div>
-    
-        <button
-            disabled={!isConnected}
-            class="ml-auto border p-0.5 mr-1 disabled:opacity-50"
-            onclick={async () => {
-                try {
-                    isReading = "LOADING";
-                    const fileContents = await connection!.espruinoReceiveFile("routine.state.json", {
-                        timeout: 6_000,
-                        fs: false,
-                        chunkSize: 300,
-                        progress: (bytes: number) => {
-                            console.log(`Received ${bytes} bytes`);
-                        }
-                    } as any);
-                    isReading = "DONE";
+            <button 
+                class="min-w-12 p-2 rounded-md font-semibold transition-all {editState === 'edit'
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
+                onclick={() => editState = editState === 'edit' ? null : 'edit'}
+            >✏️ <span class="hidden sm:inline">Edit</span></button>
 
-                    listState = JSON.parse(fileContents.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":'));
-                    localStorage.setItem('TEMP', JSON.stringify(listState))
-                } catch(err) {
-                    if (err instanceof Error) errorText = err.message;
-                    isReading = 'ERR'
-                }
-            }}
-        >{isReading === 'ERR' ? "ERROR" : isReading === "LOADING" ? 'Loading...' : 'Read State'}</button>
-    
-        <button
-            class="border p-0.5 disabled:opacity-50"
-            disabled={!isConnected}
-            onclick={async () => {
-                const ref: {
-                    [x in string]: CheckListItem;
-                } = JSON.parse(JSON.stringify(listState!.listItemRef));
+            <div class="w-px h-6 bg-gray-300"></div>
+        
+            <button
+                disabled={!isConnected}
+                class="ml-auto px-3 py-2 rounded-md font-semibold transition-all bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                onclick={async () => {
+                    try {
+                        isReading = "LOADING";
+                        const fileContents = await connection!.espruinoReceiveFile("routine.state.json", {
+                            timeout: 6_000,
+                            fs: false,
+                            chunkSize: 300,
+                            progress: (bytes: number) => {
+                                console.log(`Received ${bytes} bytes`);
+                            }
+                        } as any);
+                        isReading = "DONE";
 
-                const deleteItem = (id: number) => {
-                    if (ref[id].t !== itemType.item) // delete all children first
-                        ref[id].c.forEach(id => deleteItem(id))
+                        listState = JSON.parse(fileContents.replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":'));
+                        localStorage.setItem('TEMP', JSON.stringify(listState))
+                    } catch(err) {
+                        if (err instanceof Error) errorText = err.message;
+                        isReading = 'ERR'
+                    }
+                }}
+            >
+                {#if isReading === 'ERR'}
+                    ⚠ <span class="hidden sm:inline">Error</span>
+                {:else if isReading === "LOADING"}
+                    ⟳ <span class="hidden sm:inline">Loading...</span>
+                {:else}
+                    <span class="inline-block rotate-180">⬆</span> <span class="hidden sm:inline">Download</span>
+                {/if}
+            </button>
+        
+            <button
+                class="px-3 py-2 rounded-md font-semibold transition-all bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!isConnected}
+                onclick={async () => {
+                    const ref: {
+                        [x in string]: CheckListItem;
+                    } = JSON.parse(JSON.stringify(listState!.listItemRef));
+
+                    const deleteItem = (id: number) => {
+                        if (!ref[id]) return;
+
+                        if (ref[id].t !== itemType.item)
+                            ref[id].c.forEach(id => deleteItem(id))
+                        
+                        delete ref[id];
+                    }
+
+                    toDelete.forEach(deleteItem);
                     
-                    delete ref[id]
-                }
+                    const lists = getAllLists(ref);
+                    lists.forEach(l => l.c = l.c.filter(id => ref[id]));
 
-                toDelete.forEach(deleteItem);
-                
-                // clean up every list
-                const lists = getAllLists(ref);
-                lists.forEach(l => l.c = l.c.filter(id => ref[id]));
+                    listState!.listItemRef = ref;
+                    listState!.homeScreen = listState!.homeScreen.filter(id => ref[id]);
 
-                // set changes to svelte state
-                listState!.listItemRef = ref;
+                    await connection!.espruinoSendFile("routine.state.json", JSON.stringify(listState), {
+                        fs: true,
+                        chunkSize: 300,
+                        progress: (chunkNo, chunkCount) => updatingWatch = chunkNo / chunkCount,
+                    });
 
-                // clean up home screen list
-                listState!.homeScreen = listState!.homeScreen.filter(id => ref[id]);
+                    localStorage.setItem('TEMP', JSON.stringify(listState))
+                }}
+            >
+                {#if updatingWatch === 1}
+                    ⬆ <span class="hidden sm:inline">Update</span>
+                {:else}
+                    {Math.round(updatingWatch * 100)}%
+                {/if}
+            </button>
+        </div>
 
-                // upload data to watch
-                await connection!.espruinoSendFile("routine.state.json", JSON.stringify(listState), {
-                    fs: true, // optional: write to SD card
-                    chunkSize: 300,
-                    progress: (chunkNo, chunkCount) => updatingWatch = chunkNo / chunkCount,
-                });
-
-                localStorage.setItem('TEMP', JSON.stringify(listState))
-            }}
-        >{updatingWatch === 1 ? "Update State" : `Updating: ${Math.round(updatingWatch * 100)}%`}</button>
+        {#if errorText}
+            <div class="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-md text-sm mt-3 flex items-start gap-3">
+                <span class="text-lg">⚠</span>
+                <p>{errorText}</p>
+            </div>
+        {/if}
     </div>
 
-    {#if errorText}
-        <div class="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm m-1">
-            <p>{errorText}</p>
-        </div>
-    {/if}
-
+    <!-- Content Area -->
     {#if listState}
-        <button
-            class="border border-black w-full mt-1 p-1 font-bold"
-            onclick={() => {
-                const id = genRandId();
-                listState!.listItemRef[id] = {n: new Date().toDateString(), c: [], id, t: 1};
-                listState!.homeScreen.unshift(id);
-            }}
-        >+ List</button>
-        {#each listState.homeScreen as id (id)}
-            {@render genItem(listState.listItemRef[id])}
-        {/each}
+        <div class="space-y-0.5 sm:space-x-1.5">
+            <button
+                class="w-full border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 rounded-lg p-3 font-bold text-gray-700 hover:text-blue-600 transition-all mb-0.5"
+                onclick={() => {
+                    const id = genRandId();
+                    listState!.listItemRef[id] = {n: new Date().toDateString(), c: [], id, t: 1};
+                    listState!.homeScreen.unshift(id);
+                }}
+            >+ New List</button>
+
+            {#each listState.homeScreen as id (id)}
+                {@render genItem(listState.listItemRef[id])}
+            {/each}
+        </div>
     {:else}
-        NOT LOADED YET
+        <div class="text-center py-12">
+            <p class="text-gray-500 text-lg">Loading state...</p>
+        </div>
     {/if}
 
     {#snippet genItem(x: CheckListItem)}
         {#if x.t === itemType.item}
-            <div>
-                {@render itemButtons(x)}
-                <label>
-                <input
-                    type="checkbox"
-                    checked={!!x.d}
-                    disabled={false}
-                    onchange={(e) => {
-                        const status = Number(e.currentTarget.checked) as 1 | 0;
-                        (listState!.listItemRef[x.id] as any).d = status
-                    }}
-                >
-                    <!-- {#if editState === 'edit'} -->
+            <div class="bg-white rounded-lg border border-gray-200 py-0.5 px-1 pl-3 hover:shadow-sm transition-shadow">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={!!x.d}
+                        onchange={(e) => {
+                            const status = Number(e.currentTarget.checked) as 1 | 0;
+                            (listState!.listItemRef[x.id] as any).d = status
+                        }}
+                        class="w-5 h-5 rounded cursor-pointer accent-green-500"
+                    >
+                    <div class="flex-1 flex items-center gap-2">
+                        {@render itemButtons(x)}
                         <input 
                             id="{x.id}-name" 
                             type="text" 
                             bind:value={x.n} 
-                            class="p-0 px-1 border-0 border-b border-gray-200 mb-px {x.d ? "text-green-700" : ""}"
+                            class="rounded-md flex-1 p-2 bg-transparent border-0 border-b border-gray-200 focus:border-blue-400 focus:outline-none {x.d ? 'text-green-700' : 'text-gray-800'}"
                         />
-                    <!-- {:else}
-                        <span class="{x.d ? "text-green-700" : ""}">{x.n}</span>
-                    {/if} -->
+                    </div>
                 </label>
             </div>
         {:else}
-            <div class="mt-1 border p-0.5 mb-1">
-                <div class="border-b py-0.5 mb-0.5 border-gray-500  flex">
+            <div class="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                <div class="border-b border-gray-200 p-3 flex items-center gap-2 bg-gray-50">
                     {@render itemButtons(x)}
                     {#if editState === 'edit'}
-                        <input type="text" bind:value={x.n} class="p-0 px-1 text-lg font-bold" onchange={(e) => {
-                            e.currentTarget.value
-                        }} />
+                        <input 
+                            type="text" 
+                            bind:value={x.n} 
+                            class="flex-1 p-2 bg-white border border-gray-300 rounded font-bold text-lg focus:outline-none focus:border-blue-400"
+                        />
                     {:else}
                         {@const stats = calcItemStatus(x.id, ref)}
-                        <span class="font-bold text-lg pl-1.5 flex">
-                            <button 
-                                title="Toggle collapse {x.n}"
-                                class="mr-1 cursor-pointer hover:bg-gray-300 rounded-sm"
-                                onclick={() => expanded[x.id] = !expanded[x.id]}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-7 pb-0.5 mt-auto">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                                </svg>
-                            </button>
-                            <div class="flex font-mono">
-                                <div class="m-auto leading-0 mr-1">{stats.total}/{stats.totalDone}</div>
-                            </div> {x.n}:
+                        <button 
+                            title="Toggle collapse {x.n}"
+                            class="p-1 hover:bg-gray-300 rounded transition-colors shrink-0"
+                            onclick={() => expanded[x.id] = !expanded[x.id]}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5 transition-transform {expanded[x.id] ? 'rotate-180' : ''}">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
+                        </button>
+                        <span class="font-bold text-lg text-gray-800 flex-1">
+                            {x.n}
+                            <span class="text-sm text-gray-500 font-normal ml-2">({stats.totalDone}/{stats.total})</span>
                         </span>
                     {/if}
                 </div>
                 <div   
                     class:hidden={!expanded[x.id]}
-                    class="ml-5"
+                    class="p-3 space-y-1 bg-gray-50"
                 >
                     {#each x.c as subId (subId)}
                         {@render genItem(listState!.listItemRef[subId])}
                     {/each}
-                    <div class="flex mb-0.5">
+                    <div class="flex gap-2 pt-2">
                         <button
-                            class="border border-black w-full mr-1.5"
+                            class="flex-1 border border-gray-300 bg-white hover:bg-blue-50 rounded-md p-2 font-semibold text-gray-700 hover:text-blue-600 transition-colors"
                             onclick={() => {
                                 const id = genRandId();
                                 listState!.listItemRef[id] = {n: '', d: 0, id, t: 0};
@@ -246,7 +274,7 @@
                             }}
                         >+ Item</button>
                         <button
-                            class="border border-black w-full"
+                            class="flex-1 border border-gray-300 bg-white hover:bg-emerald-50 rounded-md p-2 font-semibold text-gray-700 hover:text-emerald-600 transition-colors"
                             onclick={() => {
                                 const id = genRandId();
                                 listState!.listItemRef[id] = {n: '', c: [], id, t: 1};
@@ -262,12 +290,13 @@
 
 {#snippet itemButtons(x: CheckListItem)}
     <button
-        class:bg-red-300={toDelete.has(x.id)}
         class:hidden={editState !== 'del'}
-        class="border border-black mr-0.5 rounded-xs w-12"
+        class="px-2 py-1 rounded transition-all {toDelete.has(x.id)
+            ? 'bg-red-500 text-white' 
+            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}"
         onclick={() => toDelete.has(x.id) ? toDelete.delete(x.id) : toDelete.add(x.id)}
-    >{toDelete.has(x.id) ? '🗑' : '-'}</button>
-    <span class:hidden={editState !== 'edit'} class="my-auto">
+    >{toDelete.has(x.id) ? '✓ Delete' : 'Mark'}</button>
+    <span class:hidden={editState !== 'edit'} class="flex gap-1">
         <button  
             onclick={() => {
                 const { list, idx } = findListAndIndex(x.id)
@@ -278,10 +307,11 @@
                     if (idx > 0) swapIndexes(list.c, idx, idx-1)
                 }
             }}
-            class="border border-black px-0.5 rounded-xs"
+            class="p-1 border border-gray-300 bg-white hover:bg-gray-100 rounded transition-colors"
+            title="Move up"
         >▲</button>
         <button
-            class="border border-black px-0.5 rounded-xs"
+            class="p-1 border border-gray-300 bg-white hover:bg-gray-100 rounded transition-colors"
             onclick={() => {
                 const { list, idx } = findListAndIndex(x.id)
                 if (list === 'home') {
@@ -291,6 +321,7 @@
                     if (idx < list.c.length - 1) swapIndexes(list.c, idx, idx+1)
                 }
             }}
+            title="Move down"
         >▼</button>
     </span>
 {/snippet}
