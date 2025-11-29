@@ -5,7 +5,6 @@
 /// <reference types="../.svelte-kit/ambient.d.ts" />
 
 import { build, files, version } from "$service-worker"
-import { dev } from '$app/environment';
 
 // if (!dev) {
     const CACHE_NAME = `cache-${version}`;
