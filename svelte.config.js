@@ -7,9 +7,7 @@ const config = {
 	// for more information about preprocessors
 	preprocess: vitePreprocess(),
 	kit: { adapter: adapter({
-		// ! NOTE:
-		/** DO NOT NAME THIS index.html (it will override the pre-rendered index.html) */
-		fallback: "CSR.html",
+		fallback: "index.html",
 	}) }
 };
 
